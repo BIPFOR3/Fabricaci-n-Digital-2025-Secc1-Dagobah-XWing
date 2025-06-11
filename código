@@ -1,0 +1,114 @@
+#include <Servo.h>
+
+// Sensor ultrasónico
+const int trigPin = 9;
+const int echoPin = 10;
+
+// Servo
+Servo miServo;
+bool servoActivo = false;
+unsigned long tiempoManoCerca = 0;
+const int tiempoRequerido = 5000; // 5 segundos
+bool cancionYaSonada = false;
+
+// LED fogata
+const int ledPin = 6;
+int brillo = 0;
+int objetivoBrillo = 0;
+unsigned long ultimaActualizacionLED = 0;
+
+// Piezo
+const int piezoPin = 4;
+unsigned long ultimoSonido = 0;
+const int intervaloSonido = 7000;
+
+void setup() {
+  miServo.attach(3);
+  miServo.write(0); // posición inicial
+
+  pinMode(ledPin, OUTPUT);
+  pinMode(piezoPin, OUTPUT);
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+}
+
+void loop() {
+  unsigned long ahora = millis();
+
+  // --- Sensor ultrasónico ---
+  long duracion;
+  int distancia;
+
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  duracion = pulseIn(echoPin, HIGH);
+  distancia = duracion * 0.034 / 2;
+
+  // --- Lógica de presencia y temporizador ---
+  if (distancia > 0 && distancia <= 20) {
+    miServo.write(90); // Subir servo
+
+    if (!servoActivo) {
+      servoActivo = true;
+      tiempoManoCerca = ahora;
+    } else {
+      if ((ahora - tiempoManoCerca >= tiempoRequerido) && !cancionYaSonada) {
+        cancionYaSonada = true;
+        reproducirMelodia();
+      }
+    }
+  } else {
+    miServo.write(0); // Bajar servo
+    servoActivo = false;
+    cancionYaSonada = false;
+  }
+
+  // --- Fogata LED ---
+  if (ahora - ultimaActualizacionLED > random(30, 100)) {
+    objetivoBrillo = random(120, 255);
+    ultimaActualizacionLED = ahora;
+  }
+
+  if (brillo < objetivoBrillo) brillo++;
+  else if (brillo > objetivoBrillo) brillo--;
+  analogWrite(ledPin, brillo);
+
+  // --- R2D2 pitidos si no está sonando la canción ---
+  if (!servoActivo && (ahora - ultimoSonido > intervaloSonido + random(0, 3000))) {
+    r2d2Sound();
+    ultimoSonido = ahora;
+  }
+}
+
+// --- Funciones de sonido ---
+
+void r2d2Sound() {
+  int beeps = random(2, 5);
+  for (int i = 0; i < beeps; i++) {
+    int frecuencia = random(900, 3000);
+    int duracion = random(50, 150);
+    tone(piezoPin, frecuencia, duracion);
+    delay(duracion + random(50, 120));
+  }
+  noTone(piezoPin);
+}
+
+void reproducirMelodia() {
+  int melodia[] = {
+    440, 440, 440, 349, 523, 440, 349, 523, 440,
+    659, 659, 659, 698, 523, 415, 349, 523, 440
+  };
+  int duraciones[] = {
+    350, 350, 350, 250, 150, 350, 250, 150, 700,
+    350, 350, 350, 250, 150, 350, 250, 150, 700
+  };
+
+  for (int i = 0; i < 18; i++) {
+    tone(piezoPin, melodia[i], duraciones[i]);
+    delay(duraciones[i] * 1.3);
+  }
+  noTone(piezoPin);
+}
